@@ -1,0 +1,11 @@
+{
+  "bootstrap": [
+    "/api/foo.json"
+    "/api/bar.json"
+  ],
+
+  "show": [
+    "/api/foo.json"
+    "/api/bar.json"    
+  ]
+}
