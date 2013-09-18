@@ -118,18 +118,19 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "{\"responses\":[")
 
-	responses := []string{}
-
 	num := len(urls)
 
 	for i := 0; i < num; i++ {
 		str := <-c
 		if str != "error" {
-			responses = append(responses, str)
+			if( i == num - 1) {
+				fmt.Fprintf(w, "%s", str)
+			} else {
+				fmt.Fprintf(w, "%s,", str)
+			}
 		}
 	}
 
-	fmt.Fprintf(w, strings.Join(responses, ","))
 	fmt.Fprintf(w, "]}")
 }
 
