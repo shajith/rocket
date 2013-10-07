@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -33,7 +34,12 @@ var hopHeaders = []string{
 	"Upgrade",
 }
 
-func fetch(urlStr string, req *http.Request, c chan string) {
+type resp struct {
+	err error
+	str string
+}
+
+func fetch(urlStr string, req *http.Request, c chan resp) {
 	host := config["host"]
 	transport := http.DefaultTransport
 
@@ -69,25 +75,32 @@ func fetch(urlStr string, req *http.Request, c chan string) {
 	res, err := transport.RoundTrip(outreq)
 
 	if err != nil {
-		log.Printf("http: proxy error: %v", err)
-		c <- "error"
+
+		log.Printf("%s: proxy error: %v", urlStr, err)
+		c <- struct {
+			err error
+			str string
+		}{err, ""}
 		return
 	}
+
 	defer res.Body.Close()
 
 	if res.StatusCode != 200 {
-		c <- "error"
+		log.Printf("%d %s", res.StatusCode, urlStr)
+		c <- resp{errors.New(fmt.Sprintf("Error fetch %s: %v", urlStr, res.StatusCode)), ""}
 		return
 	}
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		fmt.Printf("Error")
+		c <- resp{err, ""}
+		return
 	}
 
-	fmt.Println("Fetched: ", urlStr)
+	log.Printf("%d %s", res.StatusCode, urlStr)
 
-	c <- fmt.Sprintf("{\"url\":\"%s\",\"data\":%s}", urlStr, string(body))
+	c <- resp{nil, fmt.Sprintf("{\"url\":\"%s\",\"data\":%s}", urlStr, string(body))}
 }
 
 func bundleNameFromPath(path string) string {
@@ -107,7 +120,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		urls = bundles["bootstrap"]
 	}
 
-	c := make(chan string)
+	c := make(chan resp)
 
 	for _, url := range urls {
 		go fetch(url, r, c)
@@ -121,15 +134,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	num := len(urls)
 
 	for i := 0; i < num; i++ {
-		str := <-c
-		if str != "error" {
-			if( i == num - 1) {
-				fmt.Fprintf(w, "%s", str)
-			} else {
+		resp, ok := <-c
+		if ok {
+			err, str := resp.err, resp.str
+			if err == nil {
 				fmt.Fprintf(w, "%s,", str)
 			}
+		} else {
+			log.Printf("read error")
 		}
 	}
+
+	fmt.Fprintf(w, "{}")
 
 	fmt.Fprintf(w, "]}")
 }
