@@ -100,7 +100,7 @@ func fetch(host string, urlStr string, req *http.Request, c chan resp) {
 	c <- resp{nil, fmt.Sprintf("{\"url\":\"%s\",\"data\":%s}", urlStr, string(body))}
 }
 
-func bundleNameFromPath(path string) string {
+func getBundle(path string) string {
 	parts := strings.Split(path, "/")
 	last := parts[len(parts)-1]
 	return strings.Split(last, ".")[0]
@@ -112,12 +112,12 @@ type RocketServer struct {
 }
 
 func (rs RocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	bundleName := bundleNameFromPath(r.URL.Path)
+	bundle := getBundle(r.URL.Path)
 
 	var urls []string
 
-	if rs.bundles[bundleName] != nil {
-		urls = rs.bundles[bundleName]
+	if rs.bundles[bundle] != nil {
+		urls = rs.bundles[bundle]
 	} else {
 		urls = rs.bundles["bootstrap"]
 	}
