@@ -1,7 +1,6 @@
-package main
+package rocket
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -9,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 )
 
@@ -39,8 +37,7 @@ type resp struct {
 	str string
 }
 
-func fetch(urlStr string, req *http.Request, c chan resp) {
-	host := config["host"]
+func fetch(host string, urlStr string, req *http.Request, c chan resp) {
 	transport := http.DefaultTransport
 
 	outreq := new(http.Request)
@@ -109,21 +106,26 @@ func bundleNameFromPath(path string) string {
 	return strings.Split(last, ".")[0]
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+type RocketServer struct {
+	bundles map[string][]string
+	host string
+}
+
+func (rs RocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	bundleName := bundleNameFromPath(r.URL.Path)
 
 	var urls []string
 
-	if bundles[bundleName] != nil {
-		urls = bundles[bundleName]
+	if rs.bundles[bundleName] != nil {
+		urls = rs.bundles[bundleName]
 	} else {
-		urls = bundles["bootstrap"]
+		urls = rs.bundles["bootstrap"]
 	}
 
 	c := make(chan resp)
 
 	for _, url := range urls {
-		go fetch(url, r, c)
+		go fetch(rs.host, url, r, c)
 	}
 
 	header := w.Header()
@@ -147,40 +149,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "{}")
 
-	fmt.Fprintf(w, "]}")
+	fmt.Fprintf(w, "]}")	
 }
 
-var bundles map[string][]string
-var config map[string]string
-var host string
-
-func readConfig(path string) []byte {
-	file, err := os.Open(path)
-	if err != nil {
-		panic(fmt.Sprintf("Error reading %s", path))
-	}
-
-	defer file.Close()
-
-	data, err := ioutil.ReadAll(file)
-	if err != nil {
-		panic(fmt.Sprintf("Error reading %s", path))
-	}
-
-	return data
-}
-
-func main() {
-
-	json.Unmarshal(readConfig("bundles.json"), &bundles)
-	json.Unmarshal(readConfig("config.json"), &config)
-
-	var port string
-	http.HandleFunc("/", handler)
-	if config["port"] != "" {
-		port = config["port"]
-	} else {
-		port = "8080"
-	}
-	http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
+func New(host string, bundles map[string][]string) RocketServer {
+	return RocketServer{host: host, bundles: bundles};
 }
